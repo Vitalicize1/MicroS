@@ -2,11 +2,15 @@ from flask import Flask, request, jsonify
 import os
 import time
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from datetime import datetime
 import os
 from flask_cors import CORS
+from werkzeug.security import generate_password_hash, check_password_hash
+import jwt
+from typing import Optional
 
-from .db import get_db, create_tables
+from .db import get_db, create_tables, engine
 from .models import User, Food, MealLog
 from .schemas import AgentRequest, AgentResponse, AgentStructuredResponse, FoodCandidate, DaySummary, RecommendationItem, MealLog as MealLogSchema
 from .barcode import lookup_upc
@@ -18,7 +22,15 @@ from agentic.observability import setup_langsmith
 setup_langsmith()
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})
+# Allow cross-origin requests from frontend including Authorization header
+CORS(
+    app,
+    resources={r"/*": {"origins": "*"}},
+    supports_credentials=True,
+    allow_headers=["Content-Type", "Authorization"],
+    expose_headers=["Authorization"],
+)
+app.config["JWT_SECRET"] = os.getenv("JWT_SECRET", "dev-secret-change-me")
 
 # Simple in-memory cache for search responses
 SEARCH_CACHE_TTL = int(os.getenv("SEARCH_CACHE_TTL", "1800"))  # 30 minutes default
@@ -28,6 +40,18 @@ SEARCH_CACHE: dict[str, dict] = {}
 with app.app_context():
     create_tables()
 
+    # Lightweight SQLite column add (password_hash) if missing
+    try:
+        with engine.connect() as conn:
+            # Check if column exists
+            res = conn.execute(text("SELECT 1 FROM pragma_table_info('users') WHERE name='password_hash'"))
+            exists = res.fetchone() is not None
+            if not exists:
+                conn.execute(text("ALTER TABLE users ADD COLUMN password_hash VARCHAR"))
+    except Exception as e:
+        # Non-fatal; migration tools should handle in real deployments
+        print(f"Warning: could not ensure users.password_hash column: {e}")
+
 @app.route("/")
 def root():
     """Health check endpoint"""
@@ -36,6 +60,133 @@ def root():
         "message": "Micros API is running",
         "timestamp": datetime.utcnow().isoformat()
     })
+
+
+# -------- Authentication helpers --------
+def _create_jwt(user: User) -> str:
+    payload = {
+        "sub": user.id,
+        "username": user.username,
+        "iat": int(time.time()),
+        "exp": int(time.time()) + 60 * 60 * 24 * 7,  # 7 days
+    }
+    token = jwt.encode(payload, app.config["JWT_SECRET"], algorithm="HS256")
+    if isinstance(token, bytes):
+        token = token.decode("utf-8")
+    return token
+
+
+def _auth_user() -> Optional[User]:
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return None
+    token = auth.split(" ", 1)[1].strip()
+    try:
+        payload = jwt.decode(token, app.config["JWT_SECRET"], algorithms=["HS256"])  # type: ignore
+        user_id = int(payload.get("sub"))
+    except Exception:
+        return None
+    db = next(get_db())
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        return user
+    finally:
+        db.close()
+
+
+@app.route("/auth/register", methods=["POST"])
+def auth_register():
+    data = request.get_json() or {}
+    username = (data.get("username") or "").strip()
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+    if not username or not email or not password:
+        return jsonify({"error": "username, email, password required"}), 400
+    db = next(get_db())
+    try:
+        if db.query(User).filter((User.username == username) | (User.email == email)).first():
+            return jsonify({"error": "username or email already exists"}), 409
+        # Optional profile details
+        birthday = data.get("birthday")  # ISO date
+        age_val = None
+        if birthday:
+            try:
+                # Compute age in years
+                dt = datetime.fromisoformat(str(birthday))
+                today = datetime.utcnow().date()
+                age_val = today.year - dt.year - ((today.month, today.day) < (dt.month, dt.day))
+            except Exception:
+                age_val = None
+        user = User(
+            username=username,
+            email=email,
+            password_hash=generate_password_hash(password, method="pbkdf2:sha256"),
+            prefs={"goals": {}},
+            age=age_val,
+            weight_kg=(data.get("weight_kg") or None),
+            height_cm=(data.get("height_cm") or None),
+            gender=(data.get("gender") or None),
+            activity_level=(data.get("activity_level") or 'sedentary'),
+            goal_type=(data.get("goal_type") or 'maintain'),
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        token = _create_jwt(user)
+        return jsonify({"token": token, "user": {"id": user.id, "username": user.username, "email": user.email}})
+    finally:
+        db.close()
+
+
+@app.route("/auth/login", methods=["POST"])
+def auth_login():
+    data = request.get_json() or {}
+    username_or_email = (data.get("username") or data.get("email") or "").strip()
+    password = data.get("password") or ""
+    if not username_or_email or not password:
+        return jsonify({"error": "username/email and password required"}), 400
+    db = next(get_db())
+    try:
+        user = db.query(User).filter((User.username == username_or_email) | (User.email == username_or_email.lower())).first()
+        if not user or not user.password_hash or not check_password_hash(user.password_hash, password):
+            return jsonify({"error": "invalid credentials"}), 401
+        token = _create_jwt(user)
+        return jsonify({"token": token, "user": {"id": user.id, "username": user.username, "email": user.email}})
+    finally:
+        db.close()
+
+
+@app.route("/me", methods=["GET"])
+def me():
+    user = _auth_user()
+    if not user:
+        return jsonify({"error": "unauthorized"}), 401
+    return jsonify({"id": user.id, "username": user.username, "email": user.email})
+
+
+@app.route("/me/goals", methods=["GET", "PUT"])
+def me_goals():
+    user = _auth_user()
+    if not user:
+        return jsonify({"error": "unauthorized"}), 401
+    db = next(get_db())
+    try:
+        if request.method == "GET":
+            goals = (user.prefs or {}).get("goals", {})
+            return jsonify({"goals": goals})
+        else:
+            data = request.get_json() or {}
+            goals = data.get("goals") or {}
+            if not isinstance(goals, dict):
+                return jsonify({"error": "goals must be an object"}), 400
+            prefs = user.prefs or {}
+            prefs["goals"] = goals
+            user.prefs = prefs
+            db.add(user)
+            db.commit()
+            return jsonify({"success": True, "goals": goals})
+    finally:
+        db.close()
 
 @app.route("/summary/day")
 def day_summary_endpoint():

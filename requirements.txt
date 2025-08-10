@@ -9,6 +9,8 @@ numpy
 pandas
 pyzbar
 pillow
+pyjwt
+werkzeug
 
 # Agentic layer
 langgraph

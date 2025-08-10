@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { post, get } from '@/api/client';
+import { post, get, getUserId } from '@/api/client';
 
 interface Profile {
   age?: number;
@@ -57,11 +57,36 @@ export default function ProfilePage() {
 
   useEffect(() => {
     loadProfile();
+    // Merge prefill data from registration (one-time)
+    try {
+      const prefillRaw = localStorage.getItem('profile_prefill');
+      if (prefillRaw) {
+        const prefill = JSON.parse(prefillRaw);
+        const merged: any = {};
+        ['age','gender','activity_level','goal_type'].forEach((k)=>{
+          if (prefill[k] != null) merged[k] = prefill[k];
+        });
+        if (prefill.weight_kg != null) merged.weight_kg = prefill.weight_kg;
+        if (prefill.height_cm != null) merged.height_cm = prefill.height_cm;
+        if (Object.keys(merged).length) {
+          setProfile((p)=>({ ...p, ...merged }));
+          // Also apply to display model
+          setDisplayProfile((d)=>({ ...d,
+            age: merged.age ?? d.age,
+            gender: merged.gender ?? d.gender,
+            activity_level: merged.activity_level ?? d.activity_level,
+            goal_type: merged.goal_type ?? d.goal_type,
+          }));
+        }
+        localStorage.removeItem('profile_prefill');
+      }
+    } catch {}
   }, []);
 
   const loadProfile = async () => {
     try {
-      const response = await get('/profile/1');
+      const uid = getUserId() || 1;
+      const response = await get(`/profile/${uid}`);
       const profileData = response.profile || {};
       setProfile(profileData);
       setGoals(response.goals || {});
@@ -113,7 +138,8 @@ export default function ProfilePage() {
         profileToSave.height_cm = feetInchesToCm(displayProfile.height_ft, displayProfile.height_in);
       }
       
-      const response = await post('/profile/1', { profile: profileToSave, goals });
+      const uid = getUserId() || 1;
+      const response = await post(`/profile/${uid}`, { profile: profileToSave, goals });
       setMessage('Profile updated successfully! Goals recalculated.');
       
       // Reload to get updated goals

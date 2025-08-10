@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { postAgent, get } from '@/api/client';
+import { postAgent, get, getUserId } from '@/api/client';
 
 interface Food {
   id: number;
@@ -38,7 +38,8 @@ export default function LogPage() {
   const fetchRecentLogs = async () => {
     try {
       // This would be a real API call in production
-      const summary = await get('/summary/day?user_id=1&date=today');
+      const uid = getUserId() || 1;
+      const summary = await get(`/summary/day?user_id=${uid}&date=today`);
       if (summary?.foods_logged) {
         setRecentLogs(summary.foods_logged.slice(0, 10));
       }
@@ -53,7 +54,8 @@ export default function LogPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await postAgent(1, `search ${searchQuery}`);
+      const uid = getUserId() || 1;
+      const res = await postAgent(uid, `search ${searchQuery}`);
       setSearchResults(res.candidates || []);
     } catch (e: any) {
       setError(e?.message || 'Search failed');
@@ -73,7 +75,8 @@ export default function LogPage() {
 
     setLoading(true);
     try {
-      const res = await postAgent(1, `log meal: ${logGrams}g food_id=${selectedFood.id} meal_type=${mealType}`);
+      const uid = getUserId() || 1;
+      const res = await postAgent(uid, `log meal: ${logGrams}g food_id=${selectedFood.id} meal_type=${mealType}`);
       
       if (res.ok) {
         setSelectedFood(null);

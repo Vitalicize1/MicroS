@@ -9,6 +9,8 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True)
     email = Column(String, unique=True, index=True)
+    # For authentication (hashed via werkzeug.security.generate_password_hash)
+    password_hash = Column(String)
     prefs = Column(JSON, default={})  # Store goals and preferences
     created_at = Column(DateTime, default=datetime.utcnow)
     

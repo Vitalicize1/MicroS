@@ -2,6 +2,9 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import OfflineProvider from './components/OfflineProvider';
+import Link from 'next/link';
+import dynamic from 'next/dynamic';
+const AuthNav = dynamic(() => import('./components/AuthNav'), { ssr: false });
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -22,19 +25,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <div className="hidden md:block bg-white border-b border-gray-200 sticky top-0 z-40">
           <div className="container">
             <div className="flex items-center justify-between py-4">
-              <h1 className="text-2xl font-bold text-gray-900 mb-0">🥗 Micros</h1>
+              <Link href="/" className="text-2xl font-bold text-gray-900 mb-0">🥗 Micros</Link>
               <nav className="flex gap-6">
-                <a href="/" className="text-gray-600 hover:text-primary-600 font-medium transition-colors">🔍 Search</a>
-                <a href="/overview" className="text-gray-600 hover:text-primary-600 font-medium transition-colors">📊 Overview</a>
-                <a href="/log" className="text-gray-600 hover:text-primary-600 font-medium transition-colors">📝 Log</a>
-                <a href="/templates" className="text-gray-600 hover:text-primary-600 font-medium transition-colors">📋 Templates</a>
-                <a href="/recipes" className="text-gray-600 hover:text-primary-600 font-medium transition-colors">🍳 Recipes</a>
-                <a href="/profile" className="text-gray-600 hover:text-primary-600 font-medium transition-colors">👤 Profile</a>
-                <a href="/goals" className="text-gray-600 hover:text-primary-600 font-medium transition-colors">⚙️ Goals</a>
-                <a href="/social" className="text-gray-600 hover:text-primary-600 font-medium transition-colors">🤝 Social</a>
-                <a href="/progress" className="text-gray-600 hover:text-primary-600 font-medium transition-colors">📊 Progress</a>
-                <a href="/offline" className="text-gray-600 hover:text-primary-600 font-medium transition-colors">📴 Offline</a>
-                <a href="/barcode" className="text-gray-600 hover:text-primary-600 font-medium transition-colors">📱 Barcode</a>
+                {/* Simplified nav per spec */}
+                <Link href="/" className="text-gray-600 hover:text-primary-600 font-medium transition-colors">🏠 Home</Link>
+                <Link href="/log" className="text-gray-600 hover:text-primary-600 font-medium transition-colors">📝 Log</Link>
+                <Link href="/recipes" className="text-gray-600 hover:text-primary-600 font-medium transition-colors">📋 Templates & Recipes</Link>
+                <Link href="/profile" className="text-gray-600 hover:text-primary-600 font-medium transition-colors">👤 Profile</Link>
+                <AuthNav />
               </nav>
             </div>
           </div>
@@ -54,26 +52,22 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
         {/* Mobile Bottom Navigation */}
         <nav className="mobile-nav md:hidden">
-          <a href="/" className="mobile-nav-item">
-            <span className="mobile-nav-icon">🔍</span>
-            <span>Search</span>
-          </a>
-          <a href="/overview" className="mobile-nav-item">
-            <span className="mobile-nav-icon">📊</span>
-            <span>Overview</span>
-          </a>
-          <a href="/log" className="mobile-nav-item">
+          <Link href="/" className="mobile-nav-item">
+            <span className="mobile-nav-icon">🏠</span>
+            <span>Home</span>
+          </Link>
+          <Link href="/log" className="mobile-nav-item">
             <span className="mobile-nav-icon">📝</span>
             <span>Log</span>
-          </a>
-          <a href="/recipes" className="mobile-nav-item">
-            <span className="mobile-nav-icon">🍳</span>
-            <span>Recipes</span>
-          </a>
-          <a href="/profile" className="mobile-nav-item">
+          </Link>
+          <Link href="/recipes" className="mobile-nav-item">
+            <span className="mobile-nav-icon">📋</span>
+            <span>Templates</span>
+          </Link>
+          <Link href="/profile" className="mobile-nav-item">
             <span className="mobile-nav-icon">👤</span>
             <span>Profile</span>
-          </a>
+          </Link>
         </nav>
         </OfflineProvider>
       </body>

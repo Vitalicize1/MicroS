@@ -1,7 +1,7 @@
 "use client";
 import { useState } from 'react';
 import * as React from 'react';
-import { postAgent, post, get } from '@/api/client';
+import { postAgent, post, get, getUserId } from '@/api/client';
 
 interface Food {
   id: number;
@@ -296,7 +296,8 @@ export default function Page() {
   React.useEffect(() => {
     (async () => {
       try {
-        const s = await get('/summary/day?user_id=1&date=today');
+        const uid = getUserId() || 1;
+        const s = await get(`/summary/day?user_id=${uid}&date=today`);
         const micros = (s && s.micronutrients) || {};
         setDayMicros(micros);
       } catch {}
@@ -396,8 +397,9 @@ export default function Page() {
     
     try {
       // Search for all foods in this category
+      const uid = getUserId() || 1;
       const allResults = await Promise.all(
-        searches.map(search => postAgent(1, `search ${search}`))
+        searches.map(search => postAgent(uid, `search ${search}`))
       );
       
       // Combine all candidates
@@ -435,7 +437,8 @@ export default function Page() {
     try {
       const prefix = searchMode === 'generic' ? 'search generic ' : searchMode === 'branded' ? 'search branded ' : 'search ';
       const seq = ++requestSeqRef.current;
-      const res = await postAgent(1, `${prefix}${q} page=1 size=25`);
+      const uid = getUserId() || 1;
+      const res = await postAgent(uid, `${prefix}${q} page=1 size=25`);
       if (seq === requestSeqRef.current) {
         setData(res);
         setPage(1);
@@ -464,7 +467,8 @@ export default function Page() {
         try {
           const prefix = searchMode === 'generic' ? 'search generic ' : searchMode === 'branded' ? 'search branded ' : 'search ';
           const seq = ++requestSeqRef.current;
-          const res = await postAgent(1, `${prefix}${q} page=1 size=25`);
+          const uid = getUserId() || 1;
+          const res = await postAgent(uid, `${prefix}${q} page=1 size=25`);
           if (seq === requestSeqRef.current) {
             setData(res);
             setPage(1);
@@ -588,18 +592,23 @@ export default function Page() {
           >
             {loading ? 'Searching...' : 'Search'}
           </button>
-          <button 
-            className="btn" 
-            onClick={() => setShowFilters(!showFilters)}
-            style={{ 
-              position: 'absolute', 
-              right: '8px', 
-              top: '50%', 
-              transform: 'translateY(-50%)' 
+          {/* Optional barcode search: treat numeric 12-digit input as UPC */}
+          <button
+            className="btn"
+            onClick={() => {
+              const upc = prompt('Enter 12-digit UPC');
+              if (!upc) return;
+              setQ(upc);
+              setSearchMode('auto');
+              postAgent(1, `search ${upc}`).then(setData).catch((e)=>setError(e?.message||'Error'));
             }}
+            style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)' }}
+            aria-label="Barcode search"
+            title="Enter UPC"
           >
-            🔧
+            📱
           </button>
+          
 
           {/* Search Suggestions */}
           {showSuggestions && (q.length === 0 || q.length >= 1) && (
