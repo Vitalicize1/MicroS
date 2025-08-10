@@ -1,0 +1,30 @@
+# env
+.env
+*.env
+.flaskenv
+# virtual envs
+.venv/
+venv/
+# macOS
+.DS_Store
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+.coverage
+.pytest_cache/
+.mypy_cache/
+# DB artifacts
+micros.db
+# Node/Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/.vercel/
+frontend/.turbo/
+npm-debug.log*
+yarn-error.log*
+# Builds
+/dist/
+/build/

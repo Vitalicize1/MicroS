@@ -1,0 +1,22 @@
+flask
+flask-cors
+sqlalchemy
+alembic
+psycopg2-binary==2.9.9
+python-dotenv
+pydantic
+numpy
+pandas
+pyzbar
+pillow
+
+# Agentic layer
+langgraph
+langchain
+langchain-core
+langchain-openai
+langchain-google-genai
+
+# Optional local embed/search
+sentence-transformers
+faiss-cpu

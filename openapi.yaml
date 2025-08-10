@@ -1,0 +1,252 @@
+openapi: 3.0.3
+info:
+  title: Micros API
+  version: 0.1.0
+servers:
+  - url: http://127.0.0.1:5001
+paths:
+  /:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+
+  /agent:
+    post:
+      summary: Run the agent workflow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentRequest'
+            examples:
+              search:
+                value: { user_id: 1, message: "search oats" }
+      responses:
+        '200':
+          description: Structured agent result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentStructuredResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /barcode/lookup:
+    get:
+      summary: Lookup foods by UPC
+      parameters:
+        - name: upc
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{12}$'
+      responses:
+        '200':
+          description: UPC lookup result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  found: { type: boolean }
+                  message: { type: string, nullable: true }
+                  foods:
+                    type: array
+                    items: { $ref: '#/components/schemas/FoodCandidate' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /users/{userId}/goals:
+    get:
+      summary: Get user micronutrient goals
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Goals map
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  goals:
+                    type: object
+                    additionalProperties:
+                      type: number
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    put:
+      summary: Upsert user micronutrient goals
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [goals]
+              properties:
+                goals:
+                  type: object
+                  additionalProperties:
+                    type: number
+      responses:
+        '200':
+          description: Upserted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  goals:
+                    type: object
+                    additionalProperties:
+                      type: number
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+components:
+  parameters:
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema: { type: integer }
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ServerError:
+      description: Server error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    Health:
+      type: object
+      properties:
+        status: { type: string }
+        message: { type: string }
+        timestamp: { type: string, format: date-time }
+
+    AgentRequest:
+      type: object
+      required: [user_id, message]
+      properties:
+        user_id: { type: integer }
+        message: { type: string }
+
+    FoodCandidate:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        brand: { type: string, nullable: true }
+        upc: { type: string, nullable: true }
+        calories: { type: number, nullable: true }
+        protein_g: { type: number, nullable: true }
+        fat_g: { type: number, nullable: true }
+        carbs_g: { type: number, nullable: true }
+
+    MealLog:
+      type: object
+      properties:
+        id: { type: integer }
+        user_id: { type: integer }
+        food_id: { type: integer }
+        grams: { type: number }
+        meal_type: { type: string }
+        logged_at: { type: string, format: date-time }
+        food_name: { type: string, nullable: true }
+
+    DaySummary:
+      type: object
+      properties:
+        date: { type: string }
+        meal_count: { type: integer }
+        totals:
+          type: object
+          additionalProperties: { type: number }
+        meals:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    RecommendationItem:
+      type: object
+      properties:
+        food_id: { type: integer }
+        name: { type: string }
+        brand: { type: string, nullable: true }
+        coverage:
+          type: object
+          additionalProperties: { type: number }
+        calories_per_100g: { type: number, nullable: true }
+
+    AgentStructuredResponse:
+      type: object
+      properties:
+        ok: { type: boolean }
+        intent: { type: string, nullable: true }
+        message: { type: string }
+        confidence: { type: number }
+        needs_clarification: { type: boolean }
+        questions:
+          type: array
+          items: { type: string }
+        candidates:
+          type: array
+          items: { $ref: '#/components/schemas/FoodCandidate' }
+        selected:
+          allOf:
+            - $ref: '#/components/schemas/FoodCandidate'
+          nullable: true
+        log_result:
+          allOf:
+            - $ref: '#/components/schemas/MealLog'
+          nullable: true
+        day_summary:
+          allOf:
+            - $ref: '#/components/schemas/DaySummary'
+          nullable: true
+        recommendations:
+          type: array
+          items: { $ref: '#/components/schemas/RecommendationItem' }
+        state:
+          type: object
+          additionalProperties: true
+
+    Error:
+      type: object
+      properties:
+        error: { type: string }

@@ -1,0 +1,24 @@
+{
+  "name": "micros-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "types": "openapi-typescript ../openapi.yaml -o src/api/types.ts"
+  },
+  "dependencies": {
+    "next": "^14.2.31",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "swr": "2.2.5"
+  },
+  "devDependencies": {
+    "@types/node": "20.12.7",
+    "@types/react": "18.2.66",
+    "openapi-typescript": "6.7.5",
+    "typescript": "5.5.4"
+  }
+}
